@@ -64,10 +64,12 @@ interface GameState {
   hint2: string;
   guessedLetters: Set<string>;
   wrongGuesses: number;
-  gameStatus: "playing" | "won" | "lost";
+  gameStatus: "playing" | "won" | "lost" | "allWordsCompleted";
   score: number;
   streak: number;
   hintsUsed: number;
+  guessedWords: Set<string>;
+  currentWordIndex: number;
 }
 
 const HangmanGame: React.FC = () => {
@@ -81,31 +83,46 @@ const HangmanGame: React.FC = () => {
     score: 0,
     streak: 0,
     hintsUsed: 0,
+    guessedWords: new Set(),
+    currentWordIndex: 0,
   });
 
   const MAX_WRONG_GUESSES = 6;
 
-  // Select a random word
-  const selectRandomWord = useCallback(() => {
-    const randomIndex = Math.floor(Math.random() * TECH_WORDS.length);
-    return TECH_WORDS[randomIndex];
-  }, []);
+  // Select next word in sequence
+  const selectNextWord = useCallback(() => {
+    if (gameState.currentWordIndex >= TECH_WORDS.length) {
+      return null; // All words completed
+    }
+    return TECH_WORDS[gameState.currentWordIndex];
+  }, [gameState.currentWordIndex]);
 
-  // Initialize new game
+  // Initialize new game or next word
   const startNewGame = useCallback(() => {
-    const newWordData = selectRandomWord();
-    setGameState({
+    const newWordData = selectNextWord();
+    if (!newWordData) {
+      // All words completed
+      setGameState((prev) => ({
+        ...prev,
+        gameStatus: "allWordsCompleted",
+      }));
+      return;
+    }
+
+    setGameState((prev) => ({
       word: newWordData.word,
       hint1: newWordData.hint1,
       hint2: newWordData.hint2,
       guessedLetters: new Set(),
       wrongGuesses: 0,
       gameStatus: "playing",
-      score: gameState.score,
-      streak: gameState.streak,
+      score: prev.score,
+      streak: prev.streak,
       hintsUsed: 0,
-    });
-  }, [selectRandomWord, gameState.score, gameState.streak]);
+      guessedWords: prev.guessedWords,
+      currentWordIndex: prev.currentWordIndex,
+    }));
+  }, [selectNextWord]);
 
   // Handle hint usage
   const useHint = useCallback(() => {
@@ -152,18 +169,41 @@ const HangmanGame: React.FC = () => {
       if (hasWon) {
         newScore += 100 + gameState.word.length * 10;
         newStreak += 1;
+
+        // Add word to guessed words and move to next word
+        const newGuessedWords = new Set(gameState.guessedWords);
+        newGuessedWords.add(gameState.word);
+
+        setGameState((prev) => ({
+          ...prev,
+          guessedLetters: newGuessedLetters,
+          wrongGuesses: newWrongGuesses,
+          gameStatus: "won",
+          score: newScore,
+          streak: newStreak,
+          guessedWords: newGuessedWords,
+          currentWordIndex: prev.currentWordIndex + 1,
+        }));
       } else if (hasLost) {
         newStreak = 0;
+        setGameState((prev) => ({
+          ...prev,
+          guessedLetters: newGuessedLetters,
+          wrongGuesses: newWrongGuesses,
+          gameStatus: "lost",
+          score: newScore,
+          streak: newStreak,
+        }));
+      } else {
+        setGameState((prev) => ({
+          ...prev,
+          guessedLetters: newGuessedLetters,
+          wrongGuesses: newWrongGuesses,
+          gameStatus: "playing",
+          score: newScore,
+          streak: newStreak,
+        }));
       }
-
-      setGameState((prev) => ({
-        ...prev,
-        guessedLetters: newGuessedLetters,
-        wrongGuesses: newWrongGuesses,
-        gameStatus: hasWon ? "won" : hasLost ? "lost" : "playing",
-        score: newScore,
-        streak: newStreak,
-      }));
     },
     [gameState]
   );
@@ -194,8 +234,10 @@ const HangmanGame: React.FC = () => {
         return "🎉 Congratulations! You saved the hangman!";
       case "lost":
         return `💀 Game Over! The word was "${gameState.word}"`;
+      case "allWordsCompleted":
+        return "🏆 AMAZING! You've completed all 10 words!";
       default:
-        return "Guess the tech word!";
+        return `Guess the tech word! (${gameState.currentWordIndex + 1}/10)`;
     }
   };
 
@@ -206,6 +248,23 @@ const HangmanGame: React.FC = () => {
         <div className="text-center mb-8">
           <h1 className="text-6xl font-bold text-white mb-4">TECH HANGMAN</h1>
           <p className="text-xl text-blue-200">{getGameMessage()}</p>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="text-center mb-6">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 max-w-md mx-auto">
+            <div className="text-white font-semibold mb-2">
+              Progress: {gameState.guessedWords.size}/10 Words Completed
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-3">
+              <div
+                className="bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full transition-all duration-500"
+                style={{
+                  width: `${(gameState.guessedWords.size / 10) * 100}%`,
+                }}
+              ></div>
+            </div>
+          </div>
         </div>
 
         {/* Game Stats */}
@@ -266,38 +325,89 @@ const HangmanGame: React.FC = () => {
           </div>
         )}
 
+        {/* Celebration Section */}
+        {gameState.gameStatus === "allWordsCompleted" && (
+          <div className="text-center mb-8">
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg p-8 max-w-2xl mx-auto">
+              <div className="text-6xl mb-4">🎉🏆🎊</div>
+              <h2 className="text-3xl font-bold text-white mb-4">
+                Congratulations! You're a Tech Genius!
+              </h2>
+              <p className="text-xl text-white mb-4">
+                You've successfully guessed all 10 tech words!
+              </p>
+              <div className="text-lg text-white">
+                <p>
+                  Final Score:{" "}
+                  <span className="font-bold text-yellow-200">
+                    {gameState.score}
+                  </span>
+                </p>
+                <p>
+                  Final Streak:{" "}
+                  <span className="font-bold text-yellow-200">
+                    {gameState.streak}
+                  </span>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setGameState({
+                    word: "",
+                    hint1: "",
+                    hint2: "",
+                    guessedLetters: new Set(),
+                    wrongGuesses: 0,
+                    gameStatus: "playing",
+                    score: 0,
+                    streak: 0,
+                    hintsUsed: 0,
+                    guessedWords: new Set(),
+                    currentWordIndex: 0,
+                  });
+                }}
+                className="mt-6 bg-white text-orange-500 font-bold py-3 px-8 rounded-lg hover:bg-gray-100 transition-all duration-300"
+              >
+                Play Again
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Main Game Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-          {/* Hangman Drawing */}
-          <div className="flex justify-center">
-            <HangmanDrawing wrongGuesses={gameState.wrongGuesses} />
+        {gameState.gameStatus !== "allWordsCompleted" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            {/* Hangman Drawing */}
+            <div className="flex justify-center">
+              <HangmanDrawing wrongGuesses={gameState.wrongGuesses} />
+            </div>
+
+            {/* Game Controls */}
+            <div className="space-y-6">
+              {/* Word Display */}
+              <WordDisplay
+                word={gameState.word}
+                guessedLetters={gameState.guessedLetters}
+              />
+
+              {/* Keyboard */}
+              <Keyboard
+                guessedLetters={gameState.guessedLetters}
+                onLetterClick={handleLetterGuess}
+                disabled={gameState.gameStatus !== "playing"}
+              />
+
+              {/* New Game Button */}
+              <button
+                onClick={startNewGame}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                <RotateCcw className="w-5 h-5" />
+                New Game
+              </button>
+            </div>
           </div>
-
-          {/* Game Controls */}
-          <div className="space-y-6">
-            {/* Word Display */}
-            <WordDisplay
-              word={gameState.word}
-              guessedLetters={gameState.guessedLetters}
-            />
-
-            {/* Keyboard */}
-            <Keyboard
-              guessedLetters={gameState.guessedLetters}
-              onLetterClick={handleLetterGuess}
-              disabled={gameState.gameStatus !== "playing"}
-            />
-
-            {/* New Game Button */}
-            <button
-              onClick={startNewGame}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <RotateCcw className="w-5 h-5" />
-              New Game
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
