@@ -56,11 +56,6 @@ const TECH_WORDS = [
     hint1: "لغة برمجة شائعة ومتعددة المنصات",
     hint2: "Android  تستخدم في تطبيقات",
   },
-  {
-    word: "C++",
-    hint1: "لغة برمجة قوية وسريعة",
-    hint2: "تطوير من لغة C مع إضافة البرمجة الكائنية",
-  },
 ];
 
 interface GameState {
@@ -121,7 +116,7 @@ const HangmanGame: React.FC = () => {
     setGameState((prev) => ({
       ...prev,
       hintsUsed: prev.hintsUsed + 1,
-      score: Math.max(0, prev.score - 25), // Deduct 25 points for using a hint
+      // No score deduction for hints
     }));
   }, [gameState.gameStatus, gameState.hintsUsed]);
 
@@ -258,7 +253,7 @@ const HangmanGame: React.FC = () => {
                     onClick={useHint}
                     className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300"
                   >
-                    استخدم تلميح ({gameState.hintsUsed + 1}/2) -25 نقطة
+                    استخدم تلميح ({gameState.hintsUsed + 1}/2)
                   </button>
                 )}
                 {gameState.hintsUsed >= 2 && (
